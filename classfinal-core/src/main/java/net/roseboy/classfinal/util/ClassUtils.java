@@ -172,12 +172,14 @@ public class ClassUtils {
             CtConstructor[] ms = cc.getConstructors();
             for (CtConstructor mt : ms) {
                 if (mt.getLongName().endsWith(methodName)) {
-                    mt.insertAt(line, javaCode);
+                    // mt.insertAt(line, javaCode);
+                    mt.insertBefore(javaCode);
                 }
             }
         } else {
             CtMethod mt = cc.getDeclaredMethod(methodName);
-            mt.insertAt(line, javaCode);
+            // mt.insertAt(line, javaCode);
+            mt.insertBefore(javaCode);
         }
         bytes = cc.toBytecode();
         return bytes;
