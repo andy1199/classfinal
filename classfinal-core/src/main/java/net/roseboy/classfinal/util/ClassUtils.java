@@ -31,28 +31,58 @@ public class ClassUtils {
 
             for (CtMethod m : methods) {
                 name = m.getName();
-                //不是构造方法，在当前类，不是父lei
-                if (!m.getName().contains("<") && m.getLongName().startsWith(cc.getName())) {
-                    //m.setBody(null);//清空方法体
-                    CodeAttribute ca = m.getMethodInfo().getCodeAttribute();
-                    //接口的ca就是null,方法体本来就是空的就是-79
-                    if (ca != null && ca.getCodeLength() != 1 && ca.getCode()[0] != -79) {
-                        ClassUtils.setBodyKeepParamInfos(m, null, true);
-                        if ("void".equalsIgnoreCase(m.getReturnType().getName()) && m.getLongName().endsWith(".main(java.lang.String[])") && m.getMethodInfo().getAccessFlags() == 9) {
-                            m.insertBefore("System.out.println(\"\\nStartup failed, invalid password.\\n\");");
-                        }
-                    }
-                    // Remove LocalVariableTable and LineNumberTable attributes
+
+                // Filter for methods to process: non-constructor/initializer, belongs to the class
+                if (m.getName().contains("<") || !m.getLongName().startsWith(cc.getName())) {
+                    continue;
+                }
+
+                // Check for main method: public static void main(String[] args)
+                boolean isPublicStatic = Modifier.isPublic(m.getModifiers()) && Modifier.isStatic(m.getModifiers());
+                boolean isMainSignature = "main".equals(m.getName()) && "([Ljava/lang/String;)V".equals(m.getSignature());
+
+                if (isMainSignature && isPublicStatic) {
                     try {
-                        MethodInfo methodInfo = m.getMethodInfo();
-                        if (methodInfo != null) {
-                            methodInfo.removeAttribute(javassist.bytecode.LocalVariableAttribute.tag);
-                            methodInfo.removeAttribute(javassist.bytecode.LineNumberAttribute.tag);
-                            // System.out.println("Attempted to remove LocalVariableTable and LineNumberTable for method: " + m.getLongName());
-                        }
-                    } catch (Exception e) {
-                        // System.err.println("Error removing attributes for method: " + m.getLongName() + " - " + e.getMessage());
+                        m.setBody("{ System.out.println(\"ClassFinal: Startup failed, invalid password.\"); return; }");
+                    } catch (javassist.CannotCompileException e) {
+                        throw new RuntimeException("Failed to set body for main method: " + m.getLongName(), e);
                     }
+                } else {
+                    // For other methods (non-main, non-constructor, part of this class)
+                    MethodInfo methodInfo = m.getMethodInfo(); // Use getMethodInfo for consistency
+                    CodeAttribute ca = methodInfo.getCodeAttribute();
+
+                    if (!Modifier.isAbstract(m.getModifiers()) && !Modifier.isNative(m.getModifiers()) &&
+                        ca != null && ca.getCodeLength() > 0) {
+
+                        boolean isSingleReturnOrSimilar = (ca.getCodeLength() == 1 &&
+                                (ca.getCode()[0] == Opcode.RETURN ||
+                                 ca.getCode()[0] == Opcode.ARETURN ||
+                                 ca.getCode()[0] == Opcode.DRETURN ||
+                                 ca.getCode()[0] == Opcode.FRETURN ||
+                                 ca.getCode()[0] == Opcode.LRETURN ||
+                                 ca.getCode()[0] == Opcode.IRETURN));
+                        boolean isSingleAthrow = (ca.getCodeLength() == 1 && ca.getCode()[0] == Opcode.ATHROW);
+
+                        // Clear body if it's not already a simple return or throw.
+                        // This preserves the original logic of not clearing methods that are just "athrow" (like some empty static initializers might become)
+                        // or methods that are just "return".
+                        if (!isSingleReturnOrSimilar && !isSingleAthrow) {
+                             ClassUtils.setBodyKeepParamInfos(m, null, true);
+                        }
+                    }
+                }
+
+                // Common attribute removal for all processed methods (main or others)
+                try {
+                    MethodInfo methodInfo = m.getMethodInfo();
+                    if (methodInfo != null) { // Should always be non-null for a CtMethod
+                        methodInfo.removeAttribute(javassist.bytecode.LocalVariableAttribute.tag);
+                        methodInfo.removeAttribute(javassist.bytecode.LineNumberAttribute.tag);
+                        // System.out.println("Attempted to remove LocalVariableTable and LineNumberTable for method: " + m.getLongName());
+                    }
+                } catch (Exception e) {
+                    // System.err.println("Error removing attributes for method: " + m.getLongName() + " - " + e.getMessage());
                 }
             }
             return cc.toBytecode();
