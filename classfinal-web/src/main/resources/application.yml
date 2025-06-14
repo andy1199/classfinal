@@ -5,8 +5,9 @@ logging:
 spring:
   application:
     name: k
-  resources:
-    static-locations: classpath:/static/
+  web:
+    resources:
+      static-locations: classpath:/static/
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     timeZone: GMT+08:00
