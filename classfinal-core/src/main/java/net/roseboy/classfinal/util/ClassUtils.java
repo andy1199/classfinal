@@ -41,9 +41,18 @@ public class ClassUtils {
                         if ("void".equalsIgnoreCase(m.getReturnType().getName()) && m.getLongName().endsWith(".main(java.lang.String[])") && m.getMethodInfo().getAccessFlags() == 9) {
                             m.insertBefore("System.out.println(\"\\nStartup failed, invalid password.\\n\");");
                         }
-
                     }
-
+                    // Remove LocalVariableTable and LineNumberTable attributes
+                    try {
+                        MethodInfo methodInfo = m.getMethodInfo();
+                        if (methodInfo != null) {
+                            methodInfo.removeAttribute(javassist.bytecode.LocalVariableAttribute.tag);
+                            methodInfo.removeAttribute(javassist.bytecode.LineNumberAttribute.tag);
+                            // System.out.println("Attempted to remove LocalVariableTable and LineNumberTable for method: " + m.getLongName());
+                        }
+                    } catch (Exception e) {
+                        // System.err.println("Error removing attributes for method: " + m.getLongName() + " - " + e.getMessage());
+                    }
                 }
             }
             return cc.toBytecode();
